@@ -57,6 +57,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var imageReader: ImageReader
     private lateinit var previewSize: Size
     private lateinit var videoSize: Size
+    private lateinit var customHandler : CustomizedExceptionHandler
     private var shouldProceedWithOnResume: Boolean = true
     private var orientations: SparseIntArray = SparseIntArray(4).apply {
         append(Surface.ROTATION_0, 0)
@@ -70,6 +71,11 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        customHandler = CustomizedExceptionHandler("/mnt/sdcard/")
+        Thread.setDefaultUncaughtExceptionHandler(customHandler)
+        customHandler.addToLog("Application Started")
+
+
         setContentView(R.layout.activity_main)
 
         seekBar = findViewById(R.id.seekBar)
@@ -86,6 +92,8 @@ class MainActivity : AppCompatActivity() {
 
         findViewById<Button>(R.id.record_video_btn).apply {
             setOnClickListener {
+                customHandler.addToLog("Button clicked | isRecording - $isRecording")
+
                 if (isRecording) {
                     seekBar.isEnabled = true
                     mediaRecorder.stop()
@@ -96,7 +104,12 @@ class MainActivity : AppCompatActivity() {
                     findViewById<Button>(R.id.record_video_btn).setText("Record")
                 } else {
                     seekBar.isEnabled = false
-                    mediaRecorder = MediaRecorder()
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        mediaRecorder = MediaRecorder(this@MainActivity)
+                    } else{
+                        mediaRecorder = MediaRecorder()
+                    }
+                    customHandler.addToLog("mediaRecorder created")
                     setupMediaRecorder()
                     startRecording()
                     findViewById<Button>(R.id.record_video_btn).setText("Stop")
@@ -157,6 +170,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupCamera() {
+        cameras.clear()
         val cameraIds: Array<String> = cameraManager.cameraIdList
 
         for (id in cameraIds) {
@@ -166,11 +180,12 @@ class MainActivity : AppCompatActivity() {
             if (cameraCharacteristics.get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_FRONT) {
                 continue
             }
+
             if (cameraCharacteristics.get(CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE) != null) {
                 step =
                     cameraCharacteristics.get(CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE)!!
                         .toFloat() / 100
-            }
+            } else step = 0.1f
             mainHandler.post(object : Runnable {
                 override fun run() {
                     calculateFOV(cameraManager)
@@ -182,7 +197,9 @@ class MainActivity : AppCompatActivity() {
 
             seekBar.progress = 1
             focus.setText("focus " + seekBar.progress * step)
+
             setFormats(cameraCharacteristics)
+            textureView.setTransform(Utility.computeTransformationMatrix(textureView,cameraCharacteristics,previewSize,Surface.ROTATION_0))
 
             cameraId = id
             cameras.add(id)
@@ -305,6 +322,7 @@ class MainActivity : AppCompatActivity() {
         mediaRecorder.setOutputFile(File(createFile(), "$time.mp4").path)
         mediaRecorder.setVideoEncodingBitRate(10_000_000)
         mediaRecorder.prepare()
+        customHandler.addToLog("mediaRecorder setup")
     }
 
     private fun startRecording() {
@@ -325,15 +343,17 @@ class MainActivity : AppCompatActivity() {
             captureStateVideoCallback,
             backgroundHandler
         )
+        customHandler.addToLog("mediaRecorder start recording")
+
         val file = File(createFile(), "$time.txt")
         file.createNewFile()
         val stream = FileOutputStream(file)
         try {
             stream.write("$horizontalAngle $verticalAngle".toByteArray())
+            customHandler.addToLog("file saved")
         } finally {
             stream.close()
         }
-
 
     }
 
@@ -457,9 +477,11 @@ class MainActivity : AppCompatActivity() {
     private val captureStateVideoCallback = object : CameraCaptureSession.StateCallback() {
         override fun onConfigureFailed(session: CameraCaptureSession) {
             Log.e(TAG, "Configuration failed")
+            customHandler.addToLog("Configuration failed")
         }
 
         override fun onConfigured(session: CameraCaptureSession) {
+            customHandler.addToLog("start build")
             cameraCaptureSession = session
             try {
                 cameraCaptureSession.setRepeatingRequest(
@@ -467,13 +489,15 @@ class MainActivity : AppCompatActivity() {
                     backgroundHandler
                 )
                 mediaRecorder.start()
+                customHandler.addToLog("finish build")
             } catch (e: CameraAccessException) {
                 e.printStackTrace()
                 Log.e(TAG, "Failed to start camera preview because it couldn't access the camera")
+                customHandler.addToLog("Failed to start camera preview because it couldn't access the camera")
             } catch (e: IllegalStateException) {
                 e.printStackTrace()
+                customHandler.addToLog(e.stackTrace.toString())
             }
-
         }
     }
 
