@@ -19,10 +19,7 @@ import android.util.Size
 import android.util.SparseIntArray
 import android.view.Surface
 import android.view.TextureView
-import android.widget.Button
-import android.widget.SeekBar
-import android.widget.TextView
-import android.widget.Toast
+import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -42,11 +39,15 @@ class MainActivity : AppCompatActivity() {
     lateinit var hAngle: TextView
     lateinit var vAngle: TextView
     lateinit var focus: TextView
+    lateinit var cameraNum: TextView
     val mainHandler = Handler(Looper.getMainLooper())
     private var horizontalAngle = 0f
     private var verticalAngle = 0f
     private lateinit var textureView: TextureView
+    private val cameras = arrayListOf<String>()
+    private lateinit var switch: Button
     private lateinit var cameraId: String
+    private var cameraArrow = 0
     private lateinit var backgroundHandlerThread: HandlerThread
     private lateinit var backgroundHandler: Handler
     private lateinit var cameraManager: CameraManager
@@ -74,9 +75,11 @@ class MainActivity : AppCompatActivity() {
         seekBar = findViewById(R.id.seekBar)
         seekBar.min = 1
         seekBar.max = 100
+        switch = findViewById(R.id.change)
         hAngle = findViewById(R.id.textView)
         vAngle = findViewById(R.id.textView2)
         focus = findViewById(R.id.textView3)
+        cameraNum = findViewById(R.id.textView4)
         textureView = findViewById(R.id.texture_view)
         cameraManager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
 
@@ -121,6 +124,18 @@ class MainActivity : AppCompatActivity() {
 //                startActivity(getpermission)
 //            }
 //        }
+
+        switch.setOnClickListener {
+            cameraArrow++
+            if (cameraArrow >= cameras.size)
+                cameraArrow = 0
+            cameraId = cameras[cameraArrow]
+            cameraDevice.close()
+            connectCamera()
+            val cameraCharacteristics = cameraManager.getCameraCharacteristics(cameraId)
+            setFormats(cameraCharacteristics)
+        }
+
         if (ar.size > 0) {
             requestPermissions(ar.toTypedArray(), CAMERA_REQUEST_RESULT)
         }
@@ -167,48 +182,58 @@ class MainActivity : AppCompatActivity() {
 
             seekBar.progress = 1
             focus.setText("focus " + seekBar.progress * step)
-            val streamConfigurationMap: StreamConfigurationMap? =
-                cameraCharacteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
-            seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(
-                    seekBar: SeekBar?,
-                    progress: Int,
-                    fromUser: Boolean
-                ) {
-                }
+            setFormats(cameraCharacteristics)
 
-                override fun onStartTrackingTouch(seekBar: SeekBar?) {
-                }
-
-                override fun onStopTrackingTouch(seekBar: SeekBar?) {
-                    num = seekBar!!.progress.toFloat() * step
-                    cameraDevice.close()
-                    connectCamera()
-                    focus.setText("focus " + (seekBar.progress * step))
-                }
-            })
-
-            if (streamConfigurationMap != null) {
-                val capabilities: IntArray? =
-                    cameraCharacteristics.get(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES)
-                val cap =
-                    capabilities?.contains(CameraMetadata.REQUEST_AVAILABLE_CAPABILITIES_DEPTH_OUTPUT)
-                Log.e("Is support depth?", cap.toString())
-                previewSize =
-                    cameraCharacteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)!!
-                        .getOutputSizes(ImageFormat.JPEG).maxByOrNull { it.height * it.width }!!
-                videoSize =
-                    cameraCharacteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)!!
-                        .getOutputSizes(MediaRecorder::class.java)
-                        .maxByOrNull { it.height * it.width }!!
-                imageReader = ImageReader.newInstance(
-                    previewSize.width,
-                    previewSize.height,
-                    ImageFormat.JPEG,
-                    1
-                )
-            }
             cameraId = id
+            cameras.add(id)
+
+        }
+        cameraArrow = cameras.indexOf(cameraId)
+        cameraNum.setText("number of cameras "+cameras.size)
+
+    }
+
+    private fun setFormats(cameraCharacteristics: CameraCharacteristics) {
+        val streamConfigurationMap: StreamConfigurationMap? =
+            cameraCharacteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+        seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(
+                seekBar: SeekBar?,
+                progress: Int,
+                fromUser: Boolean
+            ) {
+            }
+
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {
+            }
+
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                num = seekBar!!.progress.toFloat() * step
+                cameraDevice.close()
+                connectCamera()
+                focus.setText("focus " + (seekBar.progress * step))
+            }
+        })
+
+        if (streamConfigurationMap != null) {
+            val capabilities: IntArray? =
+                cameraCharacteristics.get(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES)
+            val cap =
+                capabilities?.contains(CameraMetadata.REQUEST_AVAILABLE_CAPABILITIES_DEPTH_OUTPUT)
+            Log.e("Is support depth?", cap.toString())
+            previewSize =
+                cameraCharacteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)!!
+                    .getOutputSizes(ImageFormat.JPEG).maxByOrNull { it.height * it.width }!!
+            videoSize =
+                cameraCharacteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)!!
+                    .getOutputSizes(MediaRecorder::class.java)
+                    .maxByOrNull { it.height * it.width }!!
+            imageReader = ImageReader.newInstance(
+                previewSize.width,
+                previewSize.height,
+                ImageFormat.JPEG,
+                1
+            )
         }
     }
 
@@ -456,7 +481,8 @@ class MainActivity : AppCompatActivity() {
     private fun createFile(): File {
         val file = File(
             Environment.getExternalStoragePublicDirectory(
-                Environment.DIRECTORY_DOWNLOADS),
+                Environment.DIRECTORY_DOWNLOADS
+            ),
             "/Matrix"
         )
         file.mkdirs()
