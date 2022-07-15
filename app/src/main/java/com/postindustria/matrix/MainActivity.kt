@@ -282,12 +282,13 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             var formatSizeList = set.toList()
-            formatSizeList = formatSizeList.sortedBy { it.width * it.height }
-
+            formatSizeList = formatSizeList.sortedByDescending { it.width * it.height }
+            Log.e("sd","$formatSizeList")
             for (i in formatSizeList){
-                if (i.width/16 == i.height/9 || i.width/9 == i.height/16){
+                if (i.width%16 == 0 && i.height%9 == 0){
                     formatSize = i
-                    continue
+                    Log.e("asd",i.toString())
+                    break
                 }
             }
 
