@@ -41,7 +41,7 @@ class MainActivity : AppCompatActivity() {
 
     var step = 0f
     private val time = System.currentTimeMillis().toString().replace(":", ".")
-    private var focusDistance = 0f
+    private var focusDistance = 5f
     private var focalLength = -1f
     private var mm_to_pixel_x = -1f
     private var mm_to_pixel_y = -1f
@@ -57,7 +57,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var textureView: TextureView
     private val cameras = arrayListOf<String>()
     private lateinit var switch: Button
-    private lateinit var resolButton: Button
     private lateinit var cameraId: String
     private var cameraArrow = 0
     private lateinit var backgroundHandlerThread: HandlerThread
@@ -69,8 +68,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var imageReader: ImageReader
     private var previewSize = arrayOf<Size>()
     private var videoSize = arrayOf<Size>()
-    private var formatSize = listOf<Size>()
-    private var formatArrow = 0
+    private var formatSize = Size(0,0)
     private lateinit var customHandler : CustomizedExceptionHandler
     private var shouldProceedWithOnResume: Boolean = true
     private var orientations: SparseIntArray = SparseIntArray(4).apply {
@@ -100,7 +98,6 @@ class MainActivity : AppCompatActivity() {
         vAngle = findViewById(R.id.textView2)
         focus = findViewById(R.id.textView3)
         cameraNum = findViewById(R.id.textView4)
-        resolButton = findViewById(R.id.resolution)
         resolution = findViewById(R.id.textView5)
         textureView = findViewById(R.id.texture_view)
         cameraManager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
@@ -153,16 +150,6 @@ class MainActivity : AppCompatActivity() {
 //                startActivity(getpermission)
 //            }
 //        }
-        resolButton.setOnClickListener {
-            formatArrow++
-            if (formatArrow >= formatSize.size)
-                formatArrow = 0
-            cameraDevice.close()
-            connectCamera()
-            val cameraCharacteristics = cameraManager.getCameraCharacteristics(cameraId)
-            resolution.setText(formatSize[formatArrow].width.toString() + "\n" + formatSize[formatArrow].height)
-            textureView.setTransform(Utility.computeTransformationMatrix(textureView,cameraCharacteristics,formatSize[formatArrow],Surface.ROTATION_0))
-        }
 
         switch.setOnClickListener {
             cameraArrow++
@@ -238,11 +225,11 @@ class MainActivity : AppCompatActivity() {
                     mainHandler.postDelayed(this, 2500)
                 }
             })
-            seekBar.progress = 1
+            seekBar.progress = 50
             focus.setText("focus " + seekBar.progress * step)
 
             setFormats(cameraCharacteristics)
-            textureView.setTransform(Utility.computeTransformationMatrix(textureView,cameraCharacteristics,formatSize[formatArrow],Surface.ROTATION_0))
+            textureView.setTransform(Utility.computeTransformationMatrix(textureView,cameraCharacteristics,formatSize,Surface.ROTATION_0))
 
             cameraId = id
             cameras.add(id)
@@ -296,20 +283,17 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             }
-            formatSize = set.toList()
-            val size = Size(1920,1080)
-            if(formatSize.contains(size)){
-                formatSize = arrayListOf(size)
-            } else {
-                formatSize = arrayListOf(formatSize.maxByOrNull { it.height * it.width }!!)
-            }
+            val formatSizeList = set.toList()
+
+            formatSize = formatSizeList.maxByOrNull { it.height * it.width }!!
 
 
-            resolution.setText(formatSize[formatArrow].width.toString() + "\n" + formatSize[formatArrow].height)
+
+            resolution.setText(formatSize.width.toString() + "\n" + formatSize.height)
 
             imageReader = ImageReader.newInstance(
-                formatSize[0].width,
-                formatSize[0].height,
+                formatSize.width,
+                formatSize.height,
                 ImageFormat.JPEG,
                 1
             )
@@ -379,8 +363,9 @@ class MainActivity : AppCompatActivity() {
         mediaRecorder.setVideoSource(MediaRecorder.VideoSource.SURFACE)
         mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
         mediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264)
-        mediaRecorder.setVideoSize( formatSize[formatArrow].width, formatSize[formatArrow].height)
+        mediaRecorder.setVideoSize( formatSize.width, formatSize.height)
         mediaRecorder.setVideoFrameRate(30)
+        mediaRecorder.setOrientationHint(90)
         mediaRecorder.setOutputFile(File(createFile(), "$time.mp4").path)
         mediaRecorder.setVideoEncodingBitRate(10_000_000)
         mediaRecorder.prepare()
@@ -389,7 +374,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun startRecording() {
         val surfaceTexture: SurfaceTexture? = textureView.surfaceTexture
-        surfaceTexture?.setDefaultBufferSize(formatSize[formatArrow].width, formatSize[formatArrow].height)
+        surfaceTexture?.setDefaultBufferSize(formatSize.width, formatSize.height)
         val previewSurface: Surface = Surface(surfaceTexture)
         val recordingSurface = mediaRecorder.surface
 
@@ -443,7 +428,7 @@ class MainActivity : AppCompatActivity() {
         val focusDistance: Float? = captureRequestBuilder.get(CaptureRequest.LENS_FOCUS_DISTANCE)
         Log.d("INFO", "Focus distance:" + focusDistance.toString())
 
-        captureRequestBuilder.set(CaptureRequest.LENS_FOCUS_DISTANCE, 5.0f)
+        captureRequestBuilder.set(CaptureRequest.LENS_FOCUS_DISTANCE, this.focusDistance)
 
         val focusDistance2: Float? = captureRequestBuilder.get(CaptureRequest.LENS_FOCUS_DISTANCE)
         Log.d("INFO", "Focus distance:" + focusDistance2.toString())
@@ -457,7 +442,7 @@ class MainActivity : AppCompatActivity() {
         Log.d("INFO", "Focal length x (pixel): $pixelFocalLengthX")
         Log.d("INFO", "Focal length y (pixel): $pixelFocalLengthY")
 
-        val zoomCrop = Rect(0, 0, formatSize[formatArrow].width, formatSize[formatArrow].height)
+        val zoomCrop = Rect(0, 0, formatSize.width, formatSize.height)
         captureRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, zoomCrop)
         val cropRegion = captureRequestBuilder.get(CaptureRequest.SCALER_CROP_REGION)
 
@@ -503,7 +488,7 @@ class MainActivity : AppCompatActivity() {
         override fun onOpened(camera: CameraDevice) {
             cameraDevice = camera
             val surfaceTexture: SurfaceTexture? = textureView.surfaceTexture
-            surfaceTexture?.setDefaultBufferSize(formatSize[formatArrow].width, formatSize[formatArrow].height)
+            surfaceTexture?.setDefaultBufferSize(formatSize.width, formatSize.height)
             val previewSurface: Surface = Surface(surfaceTexture)
 
             captureRequestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)

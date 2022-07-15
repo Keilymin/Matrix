@@ -89,24 +89,16 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/change" />
 
-    <Button
-        android:id="@+id/resolution"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Resolution"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
-
     <TextView
         android:id="@+id/textView5"
         android:layout_width="100dp"
         android:layout_height="40dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="16dp"
         android:text="TextView"
-        android:layout_marginTop="6dp"
         android:textColor="@color/white"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="@+id/resolution"
-        app:layout_constraintTop_toBottomOf="@+id/resolution" />
+        app:layout_constraintTop_toTopOf="parent" />
 
 
 </androidx.constraintlayout.widget.ConstraintLayout>
