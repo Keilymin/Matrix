@@ -298,7 +298,7 @@ class MainActivity : AppCompatActivity() {
             }
             formatSize = set.toList()
             val size = Size(1920,1080)
-            if(formatSize.contains(Size(1920,1080))){
+            if(formatSize.contains(size)){
                 formatSize = arrayListOf(size)
             } else {
                 formatSize = arrayListOf(formatSize.maxByOrNull { it.height * it.width }!!)
