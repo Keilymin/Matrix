@@ -285,7 +285,7 @@ class MainActivity : AppCompatActivity() {
             formatSizeList = formatSizeList.sortedByDescending { it.width * it.height }
             Log.e("sd","$formatSizeList")
             for (i in formatSizeList){
-                if (i.width%16 == 0 && i.height%9 == 0){
+                if (i.width.toFloat() / i.height.toFloat() == 16f / 9f){
                     formatSize = i
                     Log.e("asd",i.toString())
                     break
