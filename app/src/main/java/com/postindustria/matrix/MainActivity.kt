@@ -39,6 +39,7 @@ class MainActivity : AppCompatActivity() {
     lateinit var hAngle: TextView
     lateinit var vAngle: TextView
     lateinit var focus: TextView
+    lateinit var resolution: TextView
     lateinit var cameraNum: TextView
     val mainHandler = Handler(Looper.getMainLooper())
     private var horizontalAngle = 0f
@@ -46,6 +47,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var textureView: TextureView
     private val cameras = arrayListOf<String>()
     private lateinit var switch: Button
+    private lateinit var resolButton: Button
     private lateinit var cameraId: String
     private var cameraArrow = 0
     private lateinit var backgroundHandlerThread: HandlerThread
@@ -55,8 +57,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var captureRequestBuilder: CaptureRequest.Builder
     private lateinit var cameraCaptureSession: CameraCaptureSession
     private lateinit var imageReader: ImageReader
-    private lateinit var previewSize: Size
-    private lateinit var videoSize: Size
+    private var previewSize = arrayOf<Size>()
+    private var videoSize = arrayOf<Size>()
+    private var formatSize = listOf<Size>()
+    private var formatArrow = 0
     private lateinit var customHandler : CustomizedExceptionHandler
     private var shouldProceedWithOnResume: Boolean = true
     private var orientations: SparseIntArray = SparseIntArray(4).apply {
@@ -86,6 +90,8 @@ class MainActivity : AppCompatActivity() {
         vAngle = findViewById(R.id.textView2)
         focus = findViewById(R.id.textView3)
         cameraNum = findViewById(R.id.textView4)
+        resolButton = findViewById(R.id.resolution)
+        resolution = findViewById(R.id.textView5)
         textureView = findViewById(R.id.texture_view)
         cameraManager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
 
@@ -137,6 +143,15 @@ class MainActivity : AppCompatActivity() {
 //                startActivity(getpermission)
 //            }
 //        }
+        resolButton.setOnClickListener {
+            formatArrow++
+            if (formatArrow >= formatSize.size)
+                formatArrow = 0
+            cameraDevice.close()
+            connectCamera()
+            val cameraCharacteristics = cameraManager.getCameraCharacteristics(cameraId)
+            setFormats(cameraCharacteristics)
+        }
 
         switch.setOnClickListener {
             cameraArrow++
@@ -199,7 +214,7 @@ class MainActivity : AppCompatActivity() {
             focus.setText("focus " + seekBar.progress * step)
 
             setFormats(cameraCharacteristics)
-            textureView.setTransform(Utility.computeTransformationMatrix(textureView,cameraCharacteristics,previewSize,Surface.ROTATION_0))
+            textureView.setTransform(Utility.computeTransformationMatrix(textureView,cameraCharacteristics,formatSize[formatArrow],Surface.ROTATION_0))
 
             cameraId = id
             cameras.add(id)
@@ -240,14 +255,26 @@ class MainActivity : AppCompatActivity() {
             Log.e("Is support depth?", cap.toString())
             previewSize =
                 cameraCharacteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)!!
-                    .getOutputSizes(ImageFormat.JPEG).maxByOrNull { it.height * it.width }!!
+                    .getOutputSizes(ImageFormat.JPEG)
             videoSize =
                 cameraCharacteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)!!
                     .getOutputSizes(MediaRecorder::class.java)
-                    .maxByOrNull { it.height * it.width }!!
+
+            val set = mutableSetOf<Size>()
+            for (i in previewSize){
+                for (j in videoSize){
+                    if (i.width == j.width && i.height == j.height){
+                        set.add(i)
+                    }
+                }
+            }
+            formatSize = set.toList()
+
+            resolution.setText(formatSize[formatArrow].width.toString() + "\n" + formatSize[formatArrow].height)
+
             imageReader = ImageReader.newInstance(
-                previewSize.width,
-                previewSize.height,
+                formatSize[0].width,
+                formatSize[0].height,
                 ImageFormat.JPEG,
                 1
             )
@@ -317,7 +344,7 @@ class MainActivity : AppCompatActivity() {
         mediaRecorder.setVideoSource(MediaRecorder.VideoSource.SURFACE)
         mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
         mediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264)
-        mediaRecorder.setVideoSize(videoSize.width, videoSize.height)
+        mediaRecorder.setVideoSize( formatSize[formatArrow].width, formatSize[formatArrow].height)
         mediaRecorder.setVideoFrameRate(30)
         mediaRecorder.setOutputFile(File(createFile(), "$time.mp4").path)
         mediaRecorder.setVideoEncodingBitRate(10_000_000)
@@ -327,7 +354,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun startRecording() {
         val surfaceTexture: SurfaceTexture? = textureView.surfaceTexture
-        surfaceTexture?.setDefaultBufferSize(previewSize.width, previewSize.height)
+        surfaceTexture?.setDefaultBufferSize(formatSize[formatArrow].width, formatSize[formatArrow].height)
         val previewSurface: Surface = Surface(surfaceTexture)
         val recordingSurface = mediaRecorder.surface
 
@@ -411,7 +438,7 @@ class MainActivity : AppCompatActivity() {
         override fun onOpened(camera: CameraDevice) {
             cameraDevice = camera
             val surfaceTexture: SurfaceTexture? = textureView.surfaceTexture
-            surfaceTexture?.setDefaultBufferSize(previewSize.width, previewSize.height)
+            surfaceTexture?.setDefaultBufferSize(formatSize[formatArrow].width, formatSize[formatArrow].height)
             val previewSurface: Surface = Surface(surfaceTexture)
 
             captureRequestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
