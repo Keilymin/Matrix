@@ -195,8 +195,8 @@ class MainActivity : AppCompatActivity() {
             if (cameraCharacteristics.get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_FRONT) {
                 continue
             }
-
-            if (cameraCharacteristics.get(CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE) != null) {
+            val minimumLensFocus = cameraCharacteristics.get(CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE)
+            if (minimumLensFocus != null && minimumLensFocus != 0.0f) {
                 step =
                     cameraCharacteristics.get(CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE)!!
                         .toFloat() / 100
@@ -209,7 +209,6 @@ class MainActivity : AppCompatActivity() {
                     mainHandler.postDelayed(this, 2500)
                 }
             })
-
             seekBar.progress = 1
             focus.setText("focus " + seekBar.progress * step)
 
