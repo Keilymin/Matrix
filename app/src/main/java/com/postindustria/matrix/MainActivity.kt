@@ -21,7 +21,10 @@ import android.util.SizeF
 import android.util.SparseIntArray
 import android.view.Surface
 import android.view.TextureView
-import android.widget.*
+import android.widget.Button
+import android.widget.SeekBar
+import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -294,6 +297,13 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             formatSize = set.toList()
+            val size = Size(1920,1080)
+            if(formatSize.contains(Size(1920,1080))){
+                formatSize = arrayListOf(size)
+            } else {
+                formatSize = arrayListOf(formatSize.maxByOrNull { it.height * it.width }!!)
+            }
+
 
             resolution.setText(formatSize[formatArrow].width.toString() + "\n" + formatSize[formatArrow].height)
 
@@ -447,6 +457,8 @@ class MainActivity : AppCompatActivity() {
         Log.d("INFO", "Focal length x (pixel): $pixelFocalLengthX")
         Log.d("INFO", "Focal length y (pixel): $pixelFocalLengthY")
 
+        val zoomCrop = Rect(0, 0, formatSize[formatArrow].width, formatSize[formatArrow].height)
+        captureRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, zoomCrop)
         val cropRegion = captureRequestBuilder.get(CaptureRequest.SCALER_CROP_REGION)
 
         Log.d("INFO", "Crop region:$cropRegion")
