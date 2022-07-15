@@ -10,7 +10,6 @@ import android.graphics.Rect
 import android.graphics.SurfaceTexture
 import android.hardware.camera2.*
 import android.hardware.camera2.params.StreamConfigurationMap
-import android.media.ImageReader
 import android.media.MediaRecorder
 import android.net.Uri
 import android.os.*
@@ -65,7 +64,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var cameraDevice: CameraDevice
     private lateinit var captureRequestBuilder: CaptureRequest.Builder
     private lateinit var cameraCaptureSession: CameraCaptureSession
-    private lateinit var imageReader: ImageReader
     private var previewSize = arrayOf<Size>()
     private var videoSize = arrayOf<Size>()
     private var formatSize = Size(0,0)
@@ -283,20 +281,18 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             }
-            val formatSizeList = set.toList()
+            var formatSizeList = set.toList()
+            formatSizeList = formatSizeList.sortedBy { it.width * it.height }
 
-            formatSize = formatSizeList.maxByOrNull { it.height * it.width }!!
-
+            for (i in formatSizeList){
+                if (i.width/4 != i.height/3 && i.width/3 != i.height/4){
+                    formatSize = i
+                    continue
+                }
+            }
 
 
             resolution.setText(formatSize.width.toString() + "\n" + formatSize.height)
-
-            imageReader = ImageReader.newInstance(
-                formatSize.width,
-                formatSize.height,
-                ImageFormat.JPEG,
-                1
-            )
         }
     }
 
