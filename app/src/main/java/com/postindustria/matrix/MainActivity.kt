@@ -285,7 +285,7 @@ class MainActivity : AppCompatActivity() {
             formatSizeList = formatSizeList.sortedBy { it.width * it.height }
 
             for (i in formatSizeList){
-                if (i.width/4 != i.height/3 && i.width/3 != i.height/4){
+                if (i.width/16 == i.height/9 || i.width/9 == i.height/16){
                     formatSize = i
                     continue
                 }
