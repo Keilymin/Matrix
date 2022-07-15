@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.ImageFormat
+import android.graphics.Rect
 import android.graphics.SurfaceTexture
 import android.hardware.camera2.*
 import android.hardware.camera2.params.StreamConfigurationMap
@@ -16,6 +17,7 @@ import android.os.*
 import android.provider.Settings
 import android.util.Log
 import android.util.Size
+import android.util.SizeF
 import android.util.SparseIntArray
 import android.view.Surface
 import android.view.TextureView
@@ -25,6 +27,8 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import java.io.File
 import java.io.FileOutputStream
+import java.util.*
+import kotlin.math.atan
 
 
 val TAG = MainActivity::class.simpleName
@@ -34,7 +38,10 @@ class MainActivity : AppCompatActivity() {
 
     var step = 0f
     private val time = System.currentTimeMillis().toString().replace(":", ".")
-    private var num = 0f
+    private var focusDistance = 0f
+    private var focalLength = -1f
+    private var mm_to_pixel_x = -1f
+    private var mm_to_pixel_y = -1f
     lateinit var seekBar: SeekBar
     lateinit var hAngle: TextView
     lateinit var vAngle: TextView
@@ -42,8 +49,8 @@ class MainActivity : AppCompatActivity() {
     lateinit var resolution: TextView
     lateinit var cameraNum: TextView
     val mainHandler = Handler(Looper.getMainLooper())
-    private var horizontalAngle = 0f
-    private var verticalAngle = 0f
+    private var fovx : Double = 0.0
+    private var fovy : Double = 0.0
     private lateinit var textureView: TextureView
     private val cameras = arrayListOf<String>()
     private lateinit var switch: Button
@@ -196,17 +203,35 @@ class MainActivity : AppCompatActivity() {
             if (cameraCharacteristics.get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_FRONT) {
                 continue
             }
+
+            val focalLengths: FloatArray? = cameraCharacteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)
+            Log.d("INFO", "Focal lengths:")
+            Log.d("INFO", Arrays.toString(focalLengths))
+
+            val calibration: FloatArray? = cameraCharacteristics.get(CameraCharacteristics.LENS_INTRINSIC_CALIBRATION)
+            Log.d("INFO", "Calibration:")
+            Log.d("INFO", Arrays.toString(calibration))
+
+            val physicalSize: SizeF? = cameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE)
+            Log.d("INFO", "Physical size (mm): $physicalSize")
+
+            val pixelSize: Size? = cameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_PIXEL_ARRAY_SIZE)
+            Log.d("INFO", "Pixel size: $pixelSize")
+
+            mm_to_pixel_x = pixelSize!!.width / physicalSize!!.width
+            mm_to_pixel_y = pixelSize.height / physicalSize.height
+
             val minimumLensFocus = cameraCharacteristics.get(CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE)
             if (minimumLensFocus != null && minimumLensFocus != 0.0f) {
                 step =
                     cameraCharacteristics.get(CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE)!!
                         .toFloat() / 100
+                Log.d("INFO", "Focus distance step:$step")
             } else step = 0.1f
             mainHandler.post(object : Runnable {
                 override fun run() {
-                    calculateFOV(cameraManager)
-                    hAngle.text = " h angle  $horizontalAngle"
-                    vAngle.text = " v angle  $verticalAngle"
+                    hAngle.text = " fovx  $fovx"
+                    vAngle.text = " fovy  $fovy"
                     mainHandler.postDelayed(this, 2500)
                 }
             })
@@ -240,7 +265,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             override fun onStopTrackingTouch(seekBar: SeekBar?) {
-                num = seekBar!!.progress.toFloat() * step
+                focusDistance = seekBar!!.progress.toFloat() * step
                 cameraDevice.close()
                 connectCamera()
                 focus.setText("focus " + (seekBar.progress * step))
@@ -376,7 +401,7 @@ class MainActivity : AppCompatActivity() {
         file.createNewFile()
         val stream = FileOutputStream(file)
         try {
-            stream.write("$horizontalAngle $verticalAngle".toByteArray())
+            stream.write("$fovx $fovy".toByteArray())
             customHandler.addToLog("file saved")
         } finally {
             stream.close()
@@ -396,16 +421,44 @@ class MainActivity : AppCompatActivity() {
         //captureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
 
         //captureRequestBuilder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_OFF)
-        captureRequestBuilder.set(
-            CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE,
-            CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_OFF
-        )
-        captureRequestBuilder.set(
-            CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE,
-            CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE_OFF
-        )
-        captureRequestBuilder.set(CaptureRequest.LENS_FOCUS_DISTANCE, num)
-        captureRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, 1000000L)
+//        captureRequestBuilder.set(
+//            CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE,
+//            CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_OFF
+//        )
+//        captureRequestBuilder.set(
+//            CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE,
+//            CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE_OFF
+//        )
+
+        val focusDistance: Float? = captureRequestBuilder.get(CaptureRequest.LENS_FOCUS_DISTANCE)
+        Log.d("INFO", "Focus distance:" + focusDistance.toString())
+
+        captureRequestBuilder.set(CaptureRequest.LENS_FOCUS_DISTANCE, 5.0f)
+
+        val focusDistance2: Float? = captureRequestBuilder.get(CaptureRequest.LENS_FOCUS_DISTANCE)
+        Log.d("INFO", "Focus distance:" + focusDistance2.toString())
+
+        focalLength = captureRequestBuilder.get(CaptureRequest.LENS_FOCAL_LENGTH)!!
+        Log.d("INFO", "Focal length (mm): $focalLength")
+
+        val pixelFocalLengthX = focalLength * mm_to_pixel_x
+        val pixelFocalLengthY = focalLength * mm_to_pixel_y
+
+        Log.d("INFO", "Focal length x (pixel): $pixelFocalLengthX")
+        Log.d("INFO", "Focal length y (pixel): $pixelFocalLengthY")
+
+        val cropRegion = captureRequestBuilder.get(CaptureRequest.SCALER_CROP_REGION)
+
+        Log.d("INFO", "Crop region:$cropRegion")
+        if(cropRegion != null) {
+            fovx = 2.0f * atan((cropRegion!!.width() / (2.0f * pixelFocalLengthX)).toDouble())
+            fovy = 2.0f * atan((cropRegion.height() / (2.0f * pixelFocalLengthY)).toDouble())
+        }
+
+        Log.d("INFO", "fovx: $fovx")
+        Log.d("INFO", "fovy: $fovy")
+
+//        captureRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, 1000000L)
     }
 
     private val surfaceTextureListener = object : TextureView.SurfaceTextureListener {
@@ -540,25 +593,4 @@ class MainActivity : AppCompatActivity() {
         return file
     }
 
-    private fun calculateFOV(cManager: CameraManager) {
-        try {
-            for (cameraId in cManager.cameraIdList) {
-                val characteristics = cManager.getCameraCharacteristics(cameraId)
-                val cOrientation = characteristics.get(CameraCharacteristics.LENS_FACING)!!
-                if (cOrientation == CameraCharacteristics.LENS_FACING_BACK) {
-//                    val maxFocus =
-//                        characteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)
-                    val size = characteristics.get(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE)
-                    val w = size!!.width
-                    val h = size.height
-                    val focus = seekBar.progress * step
-                    horizontalAngle =
-                        (2 * Math.atan((w / (focus * 2)).toDouble())).toFloat()
-                    verticalAngle = (2 * Math.atan((h / (focus * 2)).toDouble())).toFloat()
-                }
-            }
-        } catch (e: CameraAccessException) {
-            e.printStackTrace()
-        }
-    }
 }
