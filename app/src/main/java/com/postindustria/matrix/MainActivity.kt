@@ -150,7 +150,8 @@ class MainActivity : AppCompatActivity() {
             cameraDevice.close()
             connectCamera()
             val cameraCharacteristics = cameraManager.getCameraCharacteristics(cameraId)
-            setFormats(cameraCharacteristics)
+            resolution.setText(formatSize[formatArrow].width.toString() + "\n" + formatSize[formatArrow].height)
+            textureView.setTransform(Utility.computeTransformationMatrix(textureView,cameraCharacteristics,formatSize[formatArrow],Surface.ROTATION_0))
         }
 
         switch.setOnClickListener {
