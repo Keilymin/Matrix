@@ -158,13 +158,14 @@ class MainActivity : AppCompatActivity() {
 //        }
 
         switch.setOnClickListener {
+            cameraDevice.close()
             cameraArrow++
             if (cameraArrow >= cameras.size)
                 cameraArrow = 0
             cameraId = cameras[cameraArrow]
-            cameraDevice.close()
-            connectCamera()
             setupCamera()
+            connectCamera()
+
         }
 
         if (ar.size > 0) {
@@ -308,6 +309,7 @@ class MainActivity : AppCompatActivity() {
             }
 
 
+
             resolution.setText(formatSize.width.toString() + "\n" + formatSize.height)
         }
     }
@@ -377,7 +379,7 @@ class MainActivity : AppCompatActivity() {
         mediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264)
         mediaRecorder.setVideoSize(formatSize.width, formatSize.height)
         mediaRecorder.setVideoFrameRate(30)
-        mediaRecorder.setOrientationHint(270)
+        mediaRecorder.setOrientationHint(90)
         mediaRecorder.setOutputFile(File(createFile(), "$time.mp4").path)
         mediaRecorder.setVideoEncodingBitRate(10_000_000)
         mediaRecorder.prepare()
@@ -459,6 +461,7 @@ class MainActivity : AppCompatActivity() {
         val cropRegion = captureRequestBuilder.get(CaptureRequest.SCALER_CROP_REGION)
 
         Log.d("INFO", "Crop region:$cropRegion")
+
         if (cropRegion != null) {
             fovx = 2.0f * atan((cropRegion!!.width() / (2.0f * pixelFocalLengthX)).toDouble())
             fovy = 2.0f * atan((cropRegion.height() / (2.0f * pixelFocalLengthY)).toDouble())
