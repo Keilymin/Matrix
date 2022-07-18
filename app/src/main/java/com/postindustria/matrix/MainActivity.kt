@@ -39,7 +39,7 @@ const val CAMERA_REQUEST_RESULT = 1
 class MainActivity : AppCompatActivity() {
 
     var step = 0f
-    private val time = System.currentTimeMillis().toString().replace(":", ".")
+    private var time = System.currentTimeMillis().toString().replace(":", ".")
     private var focusDistance = 5f
     private var focalLength = -1f
     private var mm_to_pixel_x = -1f
@@ -51,8 +51,8 @@ class MainActivity : AppCompatActivity() {
     lateinit var resolution: TextView
     lateinit var cameraNum: TextView
     val mainHandler = Handler(Looper.getMainLooper())
-    private var fovx : Double = 0.0
-    private var fovy : Double = 0.0
+    private var fovx: Double = 0.0
+    private var fovy: Double = 0.0
     private lateinit var textureView: TextureView
     private val cameras = arrayListOf<String>()
     private lateinit var switch: Button
@@ -66,14 +66,21 @@ class MainActivity : AppCompatActivity() {
     private lateinit var cameraCaptureSession: CameraCaptureSession
     private var previewSize = arrayOf<Size>()
     private var videoSize = arrayOf<Size>()
-    private var formatSize = Size(0,0)
-    private lateinit var customHandler : CustomizedExceptionHandler
+    private var formatSize = Size(0, 0)
+    private lateinit var customHandler: CustomizedExceptionHandler
     private var shouldProceedWithOnResume: Boolean = true
     private var orientations: SparseIntArray = SparseIntArray(4).apply {
         append(Surface.ROTATION_0, 0)
         append(Surface.ROTATION_90, 90)
         append(Surface.ROTATION_180, 180)
         append(Surface.ROTATION_270, 270)
+    }
+    private val parameters = object : Runnable {
+        override fun run() {
+            hAngle.text = " fovx  $fovx"
+            vAngle.text = " fovy  $fovy"
+            mainHandler.postDelayed(this, 2500)
+        }
     }
 
     private lateinit var mediaRecorder: MediaRecorder
@@ -113,11 +120,12 @@ class MainActivity : AppCompatActivity() {
                     cameraDevice.close()
                     connectCamera()
                     findViewById<Button>(R.id.record_video_btn).setText("Record")
+                    time = System.currentTimeMillis().toString().replace(":", ".")
                 } else {
                     seekBar.isEnabled = false
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                         mediaRecorder = MediaRecorder(this@MainActivity)
-                    } else{
+                    } else {
                         mediaRecorder = MediaRecorder()
                     }
                     customHandler.addToLog("mediaRecorder created")
@@ -156,8 +164,7 @@ class MainActivity : AppCompatActivity() {
             cameraId = cameras[cameraArrow]
             cameraDevice.close()
             connectCamera()
-            val cameraCharacteristics = cameraManager.getCameraCharacteristics(cameraId)
-            setFormats(cameraCharacteristics)
+            setupCamera()
         }
 
         if (ar.size > 0) {
@@ -181,60 +188,68 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupCamera() {
-        cameras.clear()
-        val cameraIds: Array<String> = cameraManager.cameraIdList
+        if (cameras.size == 0) {
+            val cameraIds: Array<String> = cameraManager.cameraIdList
 
-        for (id in cameraIds) {
-            val cameraCharacteristics = cameraManager.getCameraCharacteristics(id)
+            for (id in cameraIds) {
+                val cameraCharacteristics = cameraManager.getCameraCharacteristics(id)
 
-            //If we want to choose the rear facing camera instead of the front facing one
-            if (cameraCharacteristics.get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_FRONT) {
-                continue
-            }
-
-            val focalLengths: FloatArray? = cameraCharacteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)
-            Log.d("INFO", "Focal lengths:")
-            Log.d("INFO", Arrays.toString(focalLengths))
-
-            val calibration: FloatArray? = cameraCharacteristics.get(CameraCharacteristics.LENS_INTRINSIC_CALIBRATION)
-            Log.d("INFO", "Calibration:")
-            Log.d("INFO", Arrays.toString(calibration))
-
-            val physicalSize: SizeF? = cameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE)
-            Log.d("INFO", "Physical size (mm): $physicalSize")
-
-            val pixelSize: Size? = cameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_PIXEL_ARRAY_SIZE)
-            Log.d("INFO", "Pixel size: $pixelSize")
-
-            mm_to_pixel_x = pixelSize!!.width / physicalSize!!.width
-            mm_to_pixel_y = pixelSize.height / physicalSize.height
-
-            val minimumLensFocus = cameraCharacteristics.get(CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE)
-            if (minimumLensFocus != null && minimumLensFocus != 0.0f) {
-                step =
-                    cameraCharacteristics.get(CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE)!!
-                        .toFloat() / 100
-                Log.d("INFO", "Focus distance step:$step")
-            } else step = 0.1f
-            mainHandler.post(object : Runnable {
-                override fun run() {
-                    hAngle.text = " fovx  $fovx"
-                    vAngle.text = " fovy  $fovy"
-                    mainHandler.postDelayed(this, 2500)
+                //If we want to choose the rear facing camera instead of the front facing one
+                if (cameraCharacteristics.get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_FRONT) {
+                    continue
                 }
-            })
-            seekBar.progress = 50
-            focus.setText("focus " + seekBar.progress * step)
-
-            setFormats(cameraCharacteristics)
-            textureView.setTransform(Utility.computeTransformationMatrix(textureView,cameraCharacteristics,formatSize,Surface.ROTATION_0))
-
-            cameraId = id
-            cameras.add(id)
-
+                cameraId = id
+                cameras.add(id)
+            }
+            cameraArrow = cameras.indexOf(cameraId)
+            cameraNum.setText("number of cameras " + cameras.size)
+        } else {
+            mainHandler.removeCallbacks(parameters)
         }
-        cameraArrow = cameras.indexOf(cameraId)
-        cameraNum.setText("number of cameras "+cameras.size)
+
+        val cameraCharacteristics = cameraManager.getCameraCharacteristics(cameraId)
+        val focalLengths: FloatArray? =
+            cameraCharacteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)
+        Log.d("INFO", "Focal lengths:")
+        Log.d("INFO", Arrays.toString(focalLengths))
+
+        val calibration: FloatArray? =
+            cameraCharacteristics.get(CameraCharacteristics.LENS_INTRINSIC_CALIBRATION)
+        Log.d("INFO", "Calibration:")
+        Log.d("INFO", Arrays.toString(calibration))
+
+        val physicalSize: SizeF? =
+            cameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE)
+        Log.d("INFO", "Physical size (mm): $physicalSize")
+
+        val pixelSize: Size? =
+            cameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_PIXEL_ARRAY_SIZE)
+        Log.d("INFO", "Pixel size: $pixelSize")
+
+        mm_to_pixel_x = pixelSize!!.width / physicalSize!!.width
+        mm_to_pixel_y = pixelSize.height / physicalSize.height
+
+        val minimumLensFocus =
+            cameraCharacteristics.get(CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE)
+        if (minimumLensFocus != null && minimumLensFocus != 0.0f) {
+            step =
+                cameraCharacteristics.get(CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE)!!
+                    .toFloat() / 100
+            Log.d("INFO", "Focus distance step:$step")
+        } else step = 0.1f
+        mainHandler.post(parameters)
+        seekBar.progress = 50
+        focus.setText("focus " + seekBar.progress * step)
+
+        setFormats(cameraCharacteristics)
+        textureView.setTransform(
+            Utility.computeTransformationMatrix(
+                textureView,
+                cameraCharacteristics,
+                formatSize,
+                Surface.ROTATION_0
+            )
+        )
 
     }
 
@@ -274,20 +289,20 @@ class MainActivity : AppCompatActivity() {
                     .getOutputSizes(MediaRecorder::class.java)
 
             val set = mutableSetOf<Size>()
-            for (i in previewSize){
-                for (j in videoSize){
-                    if (i.width == j.width && i.height == j.height){
+            for (i in previewSize) {
+                for (j in videoSize) {
+                    if (i.width == j.width && i.height == j.height) {
                         set.add(i)
                     }
                 }
             }
             var formatSizeList = set.toList()
             formatSizeList = formatSizeList.sortedByDescending { it.width * it.height }
-            Log.e("sd","$formatSizeList")
-            for (i in formatSizeList){
-                if (i.width.toFloat() / i.height.toFloat() == 16f / 9f){
+            Log.e("sd", "$formatSizeList")
+            for (i in formatSizeList) {
+                if (i.width.toFloat() / i.height.toFloat() == 16f / 9f) {
                     formatSize = i
-                    Log.e("asd",i.toString())
+                    Log.e("asd", i.toString())
                     break
                 }
             }
@@ -360,9 +375,9 @@ class MainActivity : AppCompatActivity() {
         mediaRecorder.setVideoSource(MediaRecorder.VideoSource.SURFACE)
         mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
         mediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264)
-        mediaRecorder.setVideoSize( formatSize.width, formatSize.height)
+        mediaRecorder.setVideoSize(formatSize.width, formatSize.height)
         mediaRecorder.setVideoFrameRate(30)
-        mediaRecorder.setOrientationHint(90)
+        mediaRecorder.setOrientationHint(270)
         mediaRecorder.setOutputFile(File(createFile(), "$time.mp4").path)
         mediaRecorder.setVideoEncodingBitRate(10_000_000)
         mediaRecorder.prepare()
@@ -444,7 +459,7 @@ class MainActivity : AppCompatActivity() {
         val cropRegion = captureRequestBuilder.get(CaptureRequest.SCALER_CROP_REGION)
 
         Log.d("INFO", "Crop region:$cropRegion")
-        if(cropRegion != null) {
+        if (cropRegion != null) {
             fovx = 2.0f * atan((cropRegion!!.width() / (2.0f * pixelFocalLengthX)).toDouble())
             fovy = 2.0f * atan((cropRegion.height() / (2.0f * pixelFocalLengthY)).toDouble())
         }
